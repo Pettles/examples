@@ -75,8 +75,15 @@ class CdkSettings(BaseSettings):
 
 
 class Settings(CdkSettings):
-    account: str = Field(os.environ.get('CDK_DEFAULT_ACCOUNT'), export_mode=ExportMode.ALWAYS)
-    region: str = Field(os.environ.get('CDK_DEFAULT_REGION'))
+    account: str = Field(os.environ.get('CDK_DEFAULT_ACCOUNT'), export_mode=ExportMode.NEVER)
+    region: str = Field(os.environ.get('CDK_DEFAULT_REGION'), export_mode=ExportMode.NEVER)
+
+    codestar_connection: str = Field(..., export_mode=ExportMode.ALWAYS)
+
+    git_repo_owner: str = Field('pettles', export_mode=ExportMode.IF_NOT_DEFAULT)
+    git_repo_name: str = Field('examples', export_mode=ExportMode.IF_NOT_DEFAULT)
+    git_repo_branch: str = Field('cdk/basic-pipeline', export_mode=ExportMode.IF_NOT_DEFAULT)
+    git_repo_tag: str = Field('', export_mode=ExportMode.IF_NOT_DEFAULT)
 
     class Config:
         env_prefix = 'cdk_'
