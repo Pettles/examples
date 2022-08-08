@@ -75,8 +75,8 @@ class CdkSettings(BaseSettings):
 
 
 class Settings(CdkSettings):
-    account: str = Field(os.environ['CDK_DEFAULT_ACCOUNT'], export_mode=ExportMode.ALWAYS)
-    region: str = Field(os.environ['CDK_DEFAULT_REGION'])
+    account: str = Field(os.environ.get('CDK_DEFAULT_ACCOUNT'), export_mode=ExportMode.ALWAYS)
+    region: str = Field(os.environ.get('CDK_DEFAULT_REGION'))
 
     class Config:
         env_prefix = 'cdk_'
