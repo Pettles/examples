@@ -3,7 +3,20 @@ import os
 from aws_cdk import App
 from enum import Enum
 from pydantic import BaseSettings, Field
-from typing import Mapping, Any
+from typing import Dict, Mapping, Any
+
+
+def context_settings(settings: 'CdkSettings') -> Dict[str, Any]:
+    """
+    A settings source that searches the CDK Application's context for a value for each field in the settings.
+
+    Requires the `Config` class of the settings object to have an `app` attribute set to an instantiated `aws_cdk.App`
+    """
+    settings_dict = {}
+    for attr in settings.schema()['properties']:
+        if settings.__config__.app.node.try_get_context(attr) is not None:
+            settings_dict[attr] = settings.__config__.app.node.try_get_context(attr)
+    return settings_dict
 
 
 class ExportMode(Enum):
@@ -15,13 +28,10 @@ class ExportMode(Enum):
 
 class CdkSettings(BaseSettings):
     """
-    An extension of the pydantic.BaseSettings class that adds two methods which are specifically useful when
-    creating a settings package for AWS CDK.
+    An extension of the pydantic.BaseSettings class that allows the aws_cdk.App to be supplied at instantiation so that
+    the context variables can be used as a source.
 
-    * `update_from_context`
-      A method that can be used to update values of settings based on the context items imported from the cdk.json,
-      cdk.context.json file, or supplied to the CDK application as inline context items using `-c|--context`
-
+    Additionally, it provides the following methods that make life simpler when working with CDK Pipelines:
     * `export_variables`
       A method that is used to get all variables that are flagged for "export" and returns them in a dictionary
       with their respective values. This is used primarily for providing values for the settings to the 'Synth' action
@@ -29,18 +39,26 @@ class CdkSettings(BaseSettings):
       within the environment of the 'Synth' CodeBuild project so that the custom values are retained and do not
       revert to their defaults.
     """
+    class Config:
+        app: App = None
 
-    def update_from_context(self, app: App) -> None:
-        """Iterates through all of the keys that are present in the settings and attempts to retrieve a value
-        from the CDK Application's context. If a value is found in context, it will replace any values that have been
-        acquired from environment variables or a .env file.
+        @classmethod
+        def customise_sources(
+            cls,
+            init_settings,
+            env_settings,
+            file_secret_settings,
+        ):
+            return (
+                init_settings,
+                context_settings,
+                env_settings,
+                file_secret_settings,
+            )
 
-        No prefix needs to be supplied to context variables in order to target their associated settings, in the event
-        that a prefix is supplied in the settings configuration.
-        """
-        for key, value in self:
-            if context_value := app.node.try_get_context(key):
-                setattr(self, key, context_value)
+    def __init__(self, app: App) -> None:
+        self.__config__.app = app
+        super(CdkSettings, self).__init__()
 
     def export_variables(self) -> Mapping[str, Any]:
         """Iterates through all of the settings and locates any fields that have the 'export_mode' property, then
@@ -76,10 +94,7 @@ class CdkSettings(BaseSettings):
 
 class Settings(CdkSettings):
     account: str = Field(os.environ.get('CDK_DEFAULT_ACCOUNT'), export_mode=ExportMode.ALWAYS)
-    region: str = Field(os.environ.get('CDK_DEFAULT_REGION'))
+    region: str = Field(os.environ.get('CDK_DEFAULT_REGION'), export_mode=ExportMode.ALWAYS)
 
     class Config:
         env_prefix = 'cdk_'
-
-
-settings = Settings()
